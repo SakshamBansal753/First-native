@@ -1,20 +1,41 @@
-import { Stack,SplashScreen } from "expo-router";
-import "@/global.css"
-import {useEffect} from "react"
-import { useFocusEffect } from "@react-navigation/native";
+import { Stack, SplashScreen } from "expo-router";
+import "@/global.css";
+import { useEffect } from "react";
 import { useFonts } from "expo-font";
-export default function  RootLayout(){
-const [fontsLoaded] = useFonts({
-  "sans-regular": require("../assets/fonts/PlusJakartaSans-Regular.ttf"),
-  "sans-bold": require("../assets/fonts/PlusJakartaSans-Bold.ttf"),
-  "sans-medium": require("../assets/fonts/PlusJakartaSans-Medium.ttf"),
-  "sans-semiBold": require("../assets/fonts/PlusJakartaSans-SemiBold.ttf"),
-});
-  useEffect(()=>{
-    if(fontsLoaded){
+import { ClerkProvider } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
+
+if (!publishableKey) {
+  throw new Error("Add your Clerk Publishable Key to the .env file");
+}
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    "sans-regular": require("../assets/fonts/PlusJakartaSans-Regular.ttf"),
+    "sans-bold": require("../assets/fonts/PlusJakartaSans-Bold.ttf"),
+    "sans-medium": require("../assets/fonts/PlusJakartaSans-Medium.ttf"),
+    "sans-semiBold": require("../assets/fonts/PlusJakartaSans-SemiBold.ttf"),
+    "sans-extrabold": require("../assets/fonts/PlusJakartaSans-ExtraBold.ttf"),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  },[fontsLoaded])
-  if(!fontsLoaded){ return null;}
-    return <Stack screenOptions={{headerShown:false}} />
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  return (
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </SafeAreaView>
+    </ClerkProvider>
+  );
 }

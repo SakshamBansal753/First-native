@@ -10,19 +10,19 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-3. Create your local environment file
+2. Create your local environment file
 
    ```bash
    cp .env.example .env
    ```
 
    Then open `.env` and replace the placeholder value with your Clerk publishable key.
+
+3. Start the app
+
+   ```bash
+   npx expo start
+   ```
 
 In the output, you'll find options to open the app in a
 

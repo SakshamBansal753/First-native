@@ -31,8 +31,12 @@ export default function App() {
   const profilePhotoUrl = user?.imageUrl;
 
   const handleSignOut = async () => {
-    await signOut();
-    router.replace('/(auth)/Sign-in');
+    try {
+      await signOut();
+      router.replace('/Sign-in');
+    } catch (error) {
+      console.error('Sign out failed', error);
+    }
   };
 
   return (

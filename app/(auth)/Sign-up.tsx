@@ -20,11 +20,9 @@ export default function Signup() {
   const emailIsValid = EMAIL_REGEX.test(email.trim());
   const passwordIsValid = password.length >= 8;
   const passwordsMatch = password === confirmPassword;
-  const canSubmit = emailIsValid && passwordIsValid && passwordsMatch && fetchStatus !== 'fetching';
-  const isVerifyStep =
-    signUp.status === 'missing_requirements' &&
-    signUp.unverifiedFields.includes('email_address') &&
-    signUp.missingFields.length === 0;
+  const isFetching = fetchStatus !== 'idle';
+  const canSubmit = emailIsValid && passwordIsValid && passwordsMatch && !isFetching;
+  const isSignUpReady = Boolean(signUp) && !isFetching;
 
   const navigateToHome = (url: string) => {
     if (typeof window !== 'undefined' && url.startsWith('http')) {
@@ -86,8 +84,23 @@ export default function Signup() {
     }
 
     setFormError('');
+    if (!signUp) {
+      setFormError('Sign up is not ready yet. Please wait a moment and try again.');
+      return;
+    }
 
-    await signUp.verifications.verifyEmailCode({ code: code.trim() });
+    try {
+      const result = await signUp.verifications.verifyEmailCode({ code: code.trim() });
+
+      if (result?.error) {
+        setFormError(result.error.longMessage ?? result.error.message ?? 'Verification failed. Please try again or request a new code.');
+        return;
+      }
+    } catch (verifyError) {
+      console.error('Email verification failed', verifyError);
+      setFormError((verifyError as any)?.message ?? 'Verification failed. Please try again or request a new code.');
+      return;
+    }
 
     if (signUp.status === 'complete') {
       await finalizeSignUp();
@@ -100,6 +113,19 @@ export default function Signup() {
   if (isSignedIn) {
     return null;
   }
+
+  if (!isSignUpReady) {
+    return (
+      <ThemedView className="flex-1 items-center justify-center bg-[#F5EFE2]">
+        <ActivityIndicator size="large" color="#E87B4D" />
+      </ThemedView>
+    );
+  }
+
+  const isVerifyStep =
+    signUp.status === 'missing_requirements' &&
+    signUp.unverifiedFields.includes('email_address') &&
+    signUp.missingFields.length === 0;
 
   return (
     <ThemedView className="flex-1 bg-[#F5EFE2]">
@@ -145,11 +171,11 @@ export default function Signup() {
                   />
                   <Pressable
                     onPress={handleVerify}
-                    disabled={fetchStatus === 'fetching'}
+                    disabled={isFetching}
                     style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }, { shadowColor: '#E87B4D', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 4 }]}
                     className="mt-2 h-[54px] items-center justify-center rounded-[16px] bg-[#E87B4D]"
                   >
-                    {fetchStatus === 'fetching' ? (
+                    {isFetching ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text className="text-base font-sans-semibold text-white">Verify email</Text>
@@ -210,7 +236,7 @@ export default function Signup() {
                     style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }, { shadowColor: '#E87B4D', shadowOpacity: canSubmit ? 0.18 : 0, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: canSubmit ? 4 : 0 }]}
                     className={`mt-2 h-[54px] items-center justify-center rounded-[16px] ${canSubmit ? 'bg-[#E87B4D]' : 'bg-[#F1C1AA]'}`}
                   >
-                    {fetchStatus === 'fetching' ? (
+                    {isFetching ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text className={`text-base font-sans-semibold ${canSubmit ? 'text-white' : 'text-[#9C4E34]'}`}>

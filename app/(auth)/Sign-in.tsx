@@ -18,8 +18,10 @@ export default function Signin() {
 
   const emailIsValid = EMAIL_REGEX.test(email.trim());
   const passwordIsValid = password.length >= 8;
-  const canSubmit = emailIsValid && passwordIsValid && fetchStatus !== 'fetching';
-  const isCodeStep = signIn.status === 'needs_client_trust';
+  const isFetching = fetchStatus !== 'idle';
+  const canSubmit = emailIsValid && passwordIsValid && !isFetching;
+  const isSignInReady = Boolean(signIn) && !isFetching;
+  const isCodeStep = signIn?.status === 'needs_client_trust';
 
   const navigateToHome = (url: string) => {
     if (typeof window !== 'undefined' && url.startsWith('http')) {
@@ -55,6 +57,11 @@ export default function Signin() {
       return;
     }
 
+    if (!signIn) {
+      setFormError('Sign in is not ready yet. Please wait a moment and try again.');
+      return;
+    }
+
     const { error } = await signIn.password({ emailAddress: email.trim(), password });
 
     if (error) {
@@ -68,7 +75,13 @@ export default function Signin() {
       );
 
       if (emailCodeFactor) {
-        await signIn.mfa.sendEmailCode();
+        try {
+          await signIn.mfa.sendEmailCode();
+        } catch (sendError) {
+          console.error('Failed to send email code', sendError);
+          setFormError('Unable to send the verification code. Please try again.');
+          return;
+        }
       }
     } else if (signIn.status === 'complete') {
       await finalizeSignIn();
@@ -83,7 +96,23 @@ export default function Signin() {
 
     setFormError('');
 
-    await signIn.mfa.verifyEmailCode({ code: code.trim() });
+    if (!signIn) {
+      setFormError('Sign in is not ready yet. Please wait a moment and try again.');
+      return;
+    }
+
+    try {
+      const result = await signIn.mfa.verifyEmailCode({ code: code.trim() });
+
+      if (result?.error) {
+        setFormError(result.error.longMessage ?? result.error.message ?? 'Verification failed. Please try the code again.');
+        return;
+      }
+    } catch (verifyError) {
+      console.error('Email code verification failed', verifyError);
+      setFormError('Verification failed. Please check your code and try again.');
+      return;
+    }
 
     if (signIn.status === 'complete') {
       await finalizeSignIn();
@@ -95,6 +124,14 @@ export default function Signin() {
 
   if (isSignedIn) {
     return null;
+  }
+
+  if (!isSignInReady) {
+    return (
+      <ThemedView className="flex-1 items-center justify-center bg-[#F5EFE2]">
+        <ActivityIndicator size="large" color="#E87B4D" />
+      </ThemedView>
+    );
   }
 
   return (
@@ -140,14 +177,14 @@ export default function Signin() {
                   </View>
                   <Pressable
                     onPress={handleVerify}
-                    disabled={fetchStatus === 'fetching'}
+                    disabled={isFetching}
                     style={({ pressed }) => [
                       { opacity: pressed ? 0.9 : 1 },
                       { shadowColor: '#E87B4D', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
                     ]}
                     className="mt-2 h-[54px] items-center justify-center rounded-[16px] bg-[#E87B4D]"
                   >
-                    {fetchStatus === 'fetching' ? (
+                    {isFetching ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text className="text-base font-sans-semibold text-white">Verify code</Text>
@@ -199,7 +236,7 @@ export default function Signin() {
                       canSubmit ? 'bg-[#E87B4D]' : 'bg-[#F1C1AA]'
                     }`}
                   >
-                    {fetchStatus === 'fetching' ? (
+                    {isFetching ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text className={`text-base font-sans-semibold ${canSubmit ? 'text-white' : 'text-[#9C4E34]'}`}>

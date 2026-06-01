@@ -12,6 +12,13 @@ if (!publishableKey) {
   throw new Error("Add your Clerk Publishable Key to the .env file");
 }
 
+// Keep the splash screen visible until app assets (fonts) are ready.
+// Call at module load so the splash doesn't auto-hide before our app can hide it.
+if (SplashScreen?.preventAutoHideAsync) {
+  // fire-and-forget; catch to avoid unhandled rejection during module init
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     "sans-regular": require("../assets/fonts/PlusJakartaSans-Regular.ttf"),

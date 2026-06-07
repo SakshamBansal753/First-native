@@ -8,7 +8,7 @@ import images from "@/constants/images";
 import { icons } from '@/constants/icons';
 import { SafeAreaView as RNSafeAreaView } from "react-native-safe-area-context";
 import { styled } from "nativewind";
-import { HOME_BALANCE, HOME_SUBSCRIPTIONS, UPCOMING_SUBSCRIPTIONS } from "@/constants/data";
+import { HOME_SUBSCRIPTIONS, UPCOMING_SUBSCRIPTIONS } from "@/constants/data";
 import { formatCurrency } from "@/lib/utils";
 import ListHeading from "@/components/ListHeading";
 import UpcomingSubscriptions from "@/components/UpcomingSubscriptions";
@@ -25,6 +25,8 @@ export default function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const subscriptions = useSubscriptionStore((s) => s.subscriptions);
   const addSubscription = useSubscriptionStore((s) => s.addSubscription);
+  const loadUserState = useSubscriptionStore((s) => s.loadUserState);
+  const balance = useSubscriptionStore((s) => s.balance);
   const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
@@ -37,6 +39,12 @@ export default function App() {
       : 'Subscriber';
 
   const profilePhotoUrl = user?.imageUrl;
+  const nextRenewalDate = subscriptions.find((s) => s.renewalDate)?.renewalDate;
+
+  useEffect(() => {
+    if (!user) return;
+    loadUserState(user.id);
+  }, [user, loadUserState]);
 
   useEffect(() => {
     if (!user) {
@@ -85,14 +93,14 @@ export default function App() {
                 </View>
               </View>
               <View className="home-header-actions">
-                <Pressable onPress={() => setShowCreateModal(true)} className="rounded-full bg-white/90 px-3 py-2 mr-2">
-                  <Image source={icons.add} className="w-5 h-5" />
+                <Pressable onPress={() => setShowCreateModal(true)} className="rounded-full  px-3 py-2 mr-2">
+                  <Image source={icons.add} className="w-8 h-8" />
                 </Pressable>
                 <Pressable
                   onPress={handleSignOut}
-                  className="rounded-full bg-white/90 px-4 py-2 shadow-sm shadow-black/5"
+                  className="rounded-full  px-4 py-2 shadow-sm shadow-black/5"
                 >
-                  <Text className="text-sm font-sans-semibold text-primary">Sign out</Text>
+                  <Text className="text-xl font-sans-semibold text-primary">Sign out</Text>
                 </Pressable>
               </View>
             </View>
@@ -100,17 +108,33 @@ export default function App() {
               <Text className="home-balance-label">Balance</Text>
               <View className="home-balance-row">
                 <Text className="home-balance-amount">
-                  {formatCurrency(HOME_BALANCE.amount)}
+                  {formatCurrency(balance ?? 0)}
                 </Text>
                 <Text className="home-balance-date">
-                  {dayjs(HOME_BALANCE.nextRenewalDate).format('MM/DD')}
+                  {nextRenewalDate ? dayjs(nextRenewalDate).format('MM/DD') : '--'}
                 </Text>
               </View>
             </View>
             <View>
               <ListHeading title="Upcoming" />
               <FlatList
-                data={UPCOMING_SUBSCRIPTIONS}
+                data={(() => {
+                  const userUpcoming = subscriptions
+                    .filter((s) => s.renewalDate)
+                    .map((s) => ({
+                      id: s.id,
+                      icon: s.icon,
+                      name: s.name,
+                      price: s.price,
+                      currency: s.currency,
+                      daysLeft: Math.max(0, Math.ceil((new Date(s.renewalDate!).getTime() - Date.now()) / (1000 * 60 * 60 * 24))),
+                    }))
+                    .filter((u) => u.daysLeft >= 0)
+                    .sort((a, b) => a.daysLeft - b.daysLeft)
+                    .slice(0, 6);
+
+                  return [...userUpcoming, ...UPCOMING_SUBSCRIPTIONS];
+                })()}
                 renderItem={({ item }) => <UpcomingSubscriptions {...item} />}
                 keyExtractor={(item) => item.id}
                 horizontal

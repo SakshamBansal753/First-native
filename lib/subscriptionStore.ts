@@ -2,47 +2,102 @@ import { create } from 'zustand';
 import { HOME_SUBSCRIPTIONS } from '@/constants/data';
 import * as SecureStore from 'expo-secure-store';
 
-const STORAGE_KEY = 'user_subscriptions_v1';
+const SUBSCRIBER_KEY = 'user_subscriptions_v1';
 
 interface SubscriptionStore {
+  currentUserId?: string;
   subscriptions: Subscription[];
+  balance: number;
+  balanceHistory: Array<{ ts: string; balance: number }>;
+  loadUserState: (userId: string) => Promise<void>;
   addSubscription: (subscription: Subscription) => void;
   updateSubscription: (id: string, updates: Partial<Subscription>) => void;
   removeSubscription: (id: string) => void;
-  setSubscriptions: (subscriptions: Subscription[]) => void;
+  setBalance: (balance: number) => void;
+  appendBalanceHistory: (entry: { ts: string; balance: number }) => void;
 }
 
-export const useSubscriptionStore = create<SubscriptionStore>((set) => ({
+const persistSubscriptions = async (userId: string, subscriptions: Subscription[]) => {
+  try {
+    const userSubs = subscriptions.filter((s) => s.userCreated);
+    await SecureStore.setItemAsync(`${SUBSCRIBER_KEY}_${userId}`, JSON.stringify(userSubs));
+  } catch (error) {
+    console.warn('Failed to persist subscriptions', error);
+  }
+};
+
+const persistBalance = async (userId: string, balance: number) => {
+  try {
+    await SecureStore.setItemAsync(`user_balance_${userId}`, String(balance));
+  } catch (error) {
+    console.warn('Failed to persist balance', error);
+  }
+};
+
+const persistBalanceHistory = async (userId: string, history: Array<{ ts: string; balance: number }>) => {
+  try {
+    await SecureStore.setItemAsync(`balance_history_${userId}`, JSON.stringify(history));
+  } catch (error) {
+    console.warn('Failed to persist balance history', error);
+  }
+};
+
+export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
+  currentUserId: undefined,
   subscriptions: HOME_SUBSCRIPTIONS,
-  addSubscription: (subscription) =>
-    set((state) => ({ subscriptions: [subscription, ...state.subscriptions] })),
-  updateSubscription: (id, updates) =>
-    set((state) => ({ subscriptions: state.subscriptions.map((s) => (s.id === id ? { ...s, ...updates } : s)) })),
-  removeSubscription: (id) =>
-    set((state) => ({ subscriptions: state.subscriptions.filter((s) => s.id !== id) })),
-  setSubscriptions: (subscriptions) => set({ subscriptions }),
-}));
+  balance: 0,
+  balanceHistory: [],
+  loadUserState: async (userId: string) => {
+    set({ currentUserId: userId });
 
-// Load persisted user subscriptions and subscribe to changes
-(async () => {
-  try {
-    const raw = await SecureStore.getItemAsync(STORAGE_KEY);
-    if (raw) {
-      const userSubs = JSON.parse(raw) as Subscription[];
-      if (userSubs && userSubs.length) {
-        useSubscriptionStore.setState({ subscriptions: [...userSubs, ...HOME_SUBSCRIPTIONS] });
-      }
+    try {
+      const rawSubs = await SecureStore.getItemAsync(`${SUBSCRIBER_KEY}_${userId}`);
+      const userSubs = rawSubs ? (JSON.parse(rawSubs) as Subscription[]) : [];
+      const rawBalance = await SecureStore.getItemAsync(`user_balance_${userId}`);
+      const rawHistory = await SecureStore.getItemAsync(`balance_history_${userId}`);
+
+      set({
+        subscriptions: userSubs.length ? [...userSubs, ...HOME_SUBSCRIPTIONS] : HOME_SUBSCRIPTIONS,
+        balance: rawBalance ? Number(rawBalance) : 0,
+        balanceHistory: rawHistory ? JSON.parse(rawHistory) : [],
+      });
+    } catch (error) {
+      console.warn('Failed to load user state', error);
+      set({ subscriptions: HOME_SUBSCRIPTIONS, balance: 0, balanceHistory: [] });
     }
-  } catch (e) {
-    console.warn('Failed to load subscriptions', e);
-  }
-})();
-
-useSubscriptionStore.subscribe((state) => state.subscriptions, (subs) => {
-  try {
-    const userSubs = subs.filter((s) => s.userCreated);
-    SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(userSubs));
-  } catch (e) {
-    console.warn('Failed to save subscriptions', e);
-  }
-});
+  },
+  addSubscription: (subscription) => {
+    set((state) => {
+      const updated = [subscription, ...state.subscriptions];
+      if (state.currentUserId) persistSubscriptions(state.currentUserId, updated);
+      return { subscriptions: updated };
+    });
+  },
+  updateSubscription: (id, updates) => {
+    set((state) => {
+      const updated = state.subscriptions.map((s) => (s.id === id ? { ...s, ...updates } : s));
+      if (state.currentUserId) persistSubscriptions(state.currentUserId, updated);
+      return { subscriptions: updated };
+    });
+  },
+  removeSubscription: (id) => {
+    set((state) => {
+      const updated = state.subscriptions.filter((s) => s.id !== id);
+      if (state.currentUserId) persistSubscriptions(state.currentUserId, updated);
+      return { subscriptions: updated };
+    });
+  },
+  setBalance: (balance) => {
+    set((state) => {
+      if (state.currentUserId) persistBalance(state.currentUserId, balance);
+      return { balance };
+    });
+  },
+  appendBalanceHistory: (entry) => {
+    set((state) => {
+      const updated = [...state.balanceHistory, entry];
+      if (state.currentUserId) persistBalanceHistory(state.currentUserId, updated);
+      return { balanceHistory: updated };
+    });
+  },
+}));

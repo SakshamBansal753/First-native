@@ -1,0 +1,12 @@
+Insights
+
+- Subscription add frequency: counts grouped by month (startDate) and shown as a horizontal bar chart in-app.
+- Balance time series: Settings saves balance changes to `balance_history_{user.id}` in SecureStore. The app reads this and can render a simple time series.
+- Purchase affordability: Insight lists subscriptions whose price exceeds the user's current balance and flags them.
+
+Implementation notes:
+- Balance and balance history are stored with keys `user_balance_{user.id}` and `balance_history_{user.id}`.
+- Newly created subscriptions are marked `userCreated: true` and persisted to SecureStore under `user_subscriptions_v1`.
+- The Insights screen in `app/(auth)/(tabs)/Insights.tsx` renders monthly counts and a simple purchase issues list.
+
+To improve visuals, consider adding a charting library (e.g., `react-native-svg` + `victory-native`) and a history table for balances.

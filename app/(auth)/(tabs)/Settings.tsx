@@ -15,6 +15,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useClerk, useUser } from '@clerk/expo';
 import { useRouter } from 'expo-router';
 import images from '@/constants/images';
+import { useSubscriptionStore } from '@/lib/subscriptionStore';
 
 const SafeAreaView = styled(RNSafeAreaView);
 
@@ -26,6 +27,20 @@ const Settings = () => {
   const [localPhotoUri, setLocalPhotoUri] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const balance = useSubscriptionStore((state) => state.balance);
+  const loadUserState = useSubscriptionStore((state) => state.loadUserState);
+  const setBalanceAction = useSubscriptionStore((state) => state.setBalance);
+  const appendBalanceHistory = useSubscriptionStore((state) => state.appendBalanceHistory);
+  const [balanceText, setBalanceText] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    loadUserState(user.id);
+  }, [user, loadUserState]);
+
+  useEffect(() => {
+    setBalanceText(balance !== null && balance !== undefined ? String(balance) : '');
+  }, [balance]);
 
   useEffect(() => {
     if (!user) {
@@ -102,6 +117,14 @@ const Settings = () => {
         await SecureStore.setItemAsync(profilePhotoKey, localPhotoUri);
       }
 
+      if (balanceText.trim()) {
+        const numericBalance = Number(balanceText.trim());
+        if (!Number.isNaN(numericBalance)) {
+          setBalanceAction(numericBalance);
+          appendBalanceHistory({ ts: new Date().toISOString(), balance: numericBalance });
+        }
+      }
+
       await (user as any).update({
         firstName,
         lastName,
@@ -138,8 +161,8 @@ const Settings = () => {
         contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="space-y-6 rounded-4xl border border-black/10 bg-white p-6 shadow-sm shadow-black/5">
-        <View className="items-center justify-center space-y-3 border-b border-black/5 pb-6">
+        <View className="space-y-6 bg-muted rounded-4xl p-6">
+        <View className="items-center justify-center space-y-3 pb-6">
           <Image source={avatarSource} className="h-30 w-30 rounded-full bg-muted" />
           <Text className="text-2xl font-sans-semibold text-primary">Profile</Text>
           <Text className="text-sm text-muted-foreground text-center">
@@ -147,7 +170,7 @@ const Settings = () => {
           </Text>
         </View>
 
-        <View className="mt-7 space-y-4">
+          <View className="mt-7 space-y-4">
           <View>
             <Text className="mb-2 text-sm font-sans-semibold text-primary">Name</Text>
             <TextInput
@@ -160,7 +183,19 @@ const Settings = () => {
             />
           </View>
 
-          <View className="rounded-4xl border border-black/10 bg-slate-50 p-5 shadow-sm shadow-black/5 mt-4">
+          <View>
+            <Text className="mb-2 text-sm font-sans-semibold text-primary">Balance</Text>
+            <TextInput
+              value={balanceText}
+              onChangeText={setBalanceText}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              className="rounded-3xl bg-background px-4 py-3 text-base text-primary"
+            />
+            <Text className="mt-2 text-sm text-muted-foreground">Update your current account balance. Changes are saved when you press Save.</Text>
+          </View>
+
+          <View className="rounded-4xl bg-background p-5 mt-4">
             <Text className="mb-3 text-sm font-sans-semibold uppercase tracking-[0.15em] text-primary/80">Profile photo</Text>
             <Pressable
               onPress={handlePickPhoto}
@@ -189,7 +224,7 @@ const Settings = () => {
         </View>
       </View>
 
-      <View className="mt-8 rounded-4xl border border-black/10 bg-white p-6 shadow-sm shadow-black/5">
+      <View className="mt-8 rounded-4xl bg-background p-6">
         <Text className="mb-2 text-base font-sans-semibold text-primary">Account</Text>
         <Text className="mb-4 text-sm text-muted-foreground">
           Sign out of your account to switch users or secure your session.
